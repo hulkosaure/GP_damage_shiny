@@ -1,5 +1,6 @@
 library(shiny)
 library(ggplot2)
+library(plotly)
 
 shard_ad <- 5.4
 ad_df <- read.csv2("gp_ad.csv", header=TRUE)
@@ -34,8 +35,8 @@ ui <- fluidPage(
                                   "Navori Quickblades" = 2))
     ),
     mainPanel(
-      # h1("EQ Damage graph"),
-      plotOutput("dmggraph"),
+      h1("EQ damage as a function of target armor"),
+      plotlyOutput("dmggraph"),
       img(src = "Gangplank_Render.webp", height = 360, width = 720)
     )
   )
@@ -46,8 +47,8 @@ server <- function(input, output) {
     input$lvl
   })
   
-  output$dmggraph <- renderPlot({
-    armor <- seq(0, 300, by = 1)
+  output$dmggraph <- renderPlotly({
+    Armor <- seq(0, 300, by = 1)
     total_AD <- shard_ad + ad_df[selected_level(), 2]
     if (2 %in% input$runes) {
       total_AD <- total_AD + shard_ad
@@ -65,19 +66,29 @@ server <- function(input, output) {
     e_damage <- e_damage_row$Damage
     
     prem_damage <- total_AD + q_damage + e_damage
-    postm_damage <- prem_damage * (100 / (100 + armor))
+    
+    # E ignores 40% armor
+    Target_armor <- Armor*0.6
+    
+    # Damage is postmitigation damage. It was renamed for tooltip clarity, as 
+    # I couldn't find a way to display a custom tooltip and the line 
+    # at the same time
+    Damage <- prem_damage * (100 / (100 + Target_armor))
+    
     # First Strike increases post-mitigation damage by 7%
     if (1 %in% input$runes) {
-      postm_damage <- postm_damage * 1.07
+      Damage <- Damage * 1.07
     }
 
-    df <- data.frame(armor = armor, postm_damage = postm_damage)
-    p <- ggplot(df, aes(x = armor, y = postm_damage)) +
-      geom_line() +
-      labs(title = "EQ damage as a function of target armor",
-           x = "Armor",
+    df <- data.frame(Armor = Armor, Damage = Damage)
+    p <- ggplot(df, 
+                aes(x = Armor, 
+                    y = Damage)) +
+      geom_line(alpha = 1) +
+      labs(x = "Armor",
            y = "Post-mitigation damage")
-    print(p)
+    p <- ggplotly(p, dynamicTicks = TRUE)
+    p
   })
 }
 
